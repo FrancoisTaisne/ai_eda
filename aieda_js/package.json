@@ -1,0 +1,16 @@
+{
+  "name": "aieda_js",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/cli-dev.js",
+    "check": "node src/cli-dev.js --self-test",
+    "bridge-dev": "node src/cli-dev.js --bridge-dev",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "archiver": "^7.0.1",
+    "esbuild": "^0.24.2"
+  }
+}

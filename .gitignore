@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+
+# Build artifacts
+build/
+*.eext
+
+# Auth tokens
+.bridge_token
+
+# IDE & tools
+.idea/
+.grok/
+.claude/
+.vscode/
+
+# Temp files
+.tmp_*
+*.log
+nul
+
+# Local artifacts
+.tmp_ref_pro_schematic_ai_drafty/
+Capture.JPG
+=3.9
+
+# Internal coordination
+SUIVI_AVANCEMENT.md

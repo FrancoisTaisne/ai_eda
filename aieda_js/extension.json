@@ -1,0 +1,103 @@
+{
+	"name": "aieda-js",
+	"uuid": "c9c8d51f0f1343c5b7df8ce8bb3d0f2e",
+	"displayName": "AI EDA Bridge",
+	"description": "Bridge plugin to connect EasyEDA Pro schematic runtime with aieda_python.",
+	"version": "0.1.0",
+	"publisher": "AIEDA",
+	"engines": {
+		"eda": "^2.3.0"
+	},
+	"license": "UNLICENSED",
+	"categories": ["Schematic", "Other"],
+	"keywords": ["AI", "EDA", "Bridge", "EasyEDA", "Schematic"],
+	"activationEvents": {},
+	"entry": "./dist/index",
+	"dependentExtensions": {},
+	"headerMenus": {
+		"home": [
+			{
+				"id": "aieda-bridge",
+				"title": "AI EDA",
+				"menuItems": [
+					{
+						"id": "aieda-about",
+						"title": "About bridge",
+						"registerFn": "about"
+					},
+					{
+						"id": "aieda-start-bridge",
+						"title": "Start bridge",
+						"registerFn": "startBridge"
+					},
+					{
+						"id": "aieda-stop-bridge",
+						"title": "Stop bridge",
+						"registerFn": "stopBridge"
+					},
+					{
+						"id": "aieda-bridge-status",
+						"title": "Bridge status",
+						"registerFn": "showBridgeStatus"
+					}
+				]
+			}
+		],
+		"sch": [
+			{
+				"id": "aieda-bridge",
+				"title": "AI EDA",
+				"menuItems": [
+					{
+						"id": "aieda-about",
+						"title": "About bridge",
+						"registerFn": "about"
+					},
+					{
+						"id": "aieda-start-bridge",
+						"title": "Start bridge",
+						"registerFn": "startBridge"
+					},
+					{
+						"id": "aieda-stop-bridge",
+						"title": "Stop bridge",
+						"registerFn": "stopBridge"
+					},
+					{
+						"id": "aieda-bridge-status",
+						"title": "Bridge status",
+						"registerFn": "showBridgeStatus"
+					}
+				]
+			}
+		],
+		"pcb": [
+			{
+				"id": "aieda-bridge",
+				"title": "AI EDA",
+				"menuItems": [
+					{
+						"id": "aieda-about",
+						"title": "About bridge",
+						"registerFn": "about"
+					},
+					{
+						"id": "aieda-start-bridge",
+						"title": "Start bridge",
+						"registerFn": "startBridge"
+					},
+					{
+						"id": "aieda-stop-bridge",
+						"title": "Stop bridge",
+						"registerFn": "stopBridge"
+					},
+					{
+						"id": "aieda-bridge-status",
+						"title": "Bridge status",
+						"registerFn": "showBridgeStatus"
+					}
+				]
+			}
+		]
+	}
+}
