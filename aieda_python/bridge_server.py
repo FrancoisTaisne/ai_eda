@@ -1,10 +1,12 @@
 """Bridge server: HTTP + WebSocket gateway between CLI and EasyEDA plugin.
 
 Exposes:
-  - POST /command   : receive a JSON command, forward to plugin via WS, return result
-  - GET  /status    : plugin connection state
-  - GET  /ws        : WebSocket endpoint for aieda_js plugin
-  - POST /shutdown  : graceful server shutdown
+  - POST /command   : receive a JSON command, forward to plugin via WS, return result (AUTH)
+  - GET  /status    : plugin connection state (AUTH)
+  - GET  /ws        : WebSocket endpoint for aieda_js plugin (TOKEN via ?token=, localhost exception)
+  - POST /shutdown  : graceful server shutdown (AUTH)
+  - GET  /healthz   : health check endpoint (NO AUTH)
+  - GET  /          : health check shortcut (NO AUTH)
 """
 
 from __future__ import annotations
@@ -12,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import secrets
 import sys
 import time
@@ -57,6 +58,19 @@ _plugin_meta: dict[str, Any] = {}
 COMMAND_TIMEOUT_S = 30.0
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _json_response(data: dict[str, Any], status: int = 200) -> web.Response:
+    return web.Response(
+        text=json.dumps(data, ensure_ascii=False),
+        content_type="application/json",
+        status=status,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Auth middleware
 # ---------------------------------------------------------------------------
 
@@ -73,13 +87,29 @@ def _check_token(request: web.Request) -> bool:
 
 @web.middleware
 async def auth_middleware(request: web.Request, handler):
-    # WebSocket and status endpoints check token themselves or are open
-    if request.path == "/ws":
-        # WS token checked inside ws_handler via query param
+    # Public endpoints (needed for Render health checks + WS handshake path)
+    if request.path in ("/ws", "/healthz", "/"):
         return await handler(request)
+
     if not _check_token(request):
         return _json_response({"ok": False, "error": "Unauthorized"}, status=401)
     return await handler(request)
+
+
+# ---------------------------------------------------------------------------
+# Health handlers (public)
+# ---------------------------------------------------------------------------
+
+
+async def health_handler(request: web.Request) -> web.Response:
+    """GET /healthz (and /) — public health check endpoint for Render."""
+    return _json_response(
+        {
+            "ok": True,
+            "service": "ai_eda_bridge",
+            "timestamp": time.time(),
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -162,23 +192,19 @@ async def _handle_plugin_message(raw: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# HTTP handlers
+# HTTP handlers (auth-protected via middleware except /healthz and /)
 # ---------------------------------------------------------------------------
 
 
 async def handle_command(request: web.Request) -> web.Response:
     """POST /command — forward a command to the plugin and wait for its result."""
     if _plugin_ws is None or _plugin_ws.closed:
-        return _json_response(
-            {"ok": False, "error": "Plugin not connected"}, status=503
-        )
+        return _json_response({"ok": False, "error": "Plugin not connected"}, status=503)
 
     try:
         body = await request.json()
     except (json.JSONDecodeError, Exception):
-        return _json_response(
-            {"ok": False, "error": "Invalid JSON body"}, status=400
-        )
+        return _json_response({"ok": False, "error": "Invalid JSON body"}, status=400)
 
     cmd_id = body.get("id")
     if not cmd_id:
@@ -211,21 +237,21 @@ async def handle_command(request: web.Request) -> web.Response:
             status=504,
         )
     except ConnectionError as exc:
-        return _json_response(
-            {"ok": False, "error": str(exc)}, status=502
-        )
+        return _json_response({"ok": False, "error": str(exc)}, status=502)
 
 
 async def handle_status(request: web.Request) -> web.Response:
     """GET /status — plugin connection state."""
     connected = _plugin_ws is not None and not _plugin_ws.closed
-    return _json_response({
-        "ok": True,
-        "plugin_connected": connected,
-        "plugin_meta": _plugin_meta if connected else None,
-        "pending_commands": len(_pending),
-        "timestamp": time.time(),
-    })
+    return _json_response(
+        {
+            "ok": True,
+            "plugin_connected": connected,
+            "plugin_meta": _plugin_meta if connected else None,
+            "pending_commands": len(_pending),
+            "timestamp": time.time(),
+        }
+    )
 
 
 async def handle_shutdown(request: web.Request) -> web.Response:
@@ -251,11 +277,13 @@ async def _ping_loop(app: web.Application) -> None:
         await asyncio.sleep(15)
         if _plugin_ws and not _plugin_ws.closed:
             try:
-                ping_msg = json.dumps({
-                    "type": "ping",
-                    "id": f"ping-{int(time.time() * 1000)}",
-                    "timestamp": time.time(),
-                })
+                ping_msg = json.dumps(
+                    {
+                        "type": "ping",
+                        "id": f"ping-{int(time.time() * 1000)}",
+                        "timestamp": time.time(),
+                    }
+                )
                 await _plugin_ws.send_str(ping_msg)
             except Exception:
                 pass
@@ -283,6 +311,12 @@ def create_app(token: str) -> web.Application:
     _server_token = token
 
     app = web.Application(middlewares=[auth_middleware])
+
+    # Public health endpoints (no auth)
+    app.router.add_get("/healthz", health_handler)
+    app.router.add_get("/", health_handler)
+
+    # WebSocket + protected endpoints
     app.router.add_get("/ws", ws_handler)
     app.router.add_post("/command", handle_command)
     app.router.add_get("/status", handle_status)
@@ -305,22 +339,13 @@ def run_server(host: str = "127.0.0.1", port: int = 8787) -> None:
     logger.info("Starting bridge server on %s:%d", host, port)
     logger.info("Auth token written to %s", TOKEN_FILE)
     # Print token to stdout so the launching process can capture it
-    print(json.dumps({"event": "server_started", "token": token, "host": host, "port": port}))
+    print(
+        json.dumps(
+            {"event": "server_started", "token": token, "host": host, "port": port}
+        )
+    )
     sys.stdout.flush()
     web.run_app(app, host=host, port=port, print=lambda msg: logger.info(msg))
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _json_response(data: dict[str, Any], status: int = 200) -> web.Response:
-    return web.Response(
-        text=json.dumps(data, ensure_ascii=False),
-        content_type="application/json",
-        status=status,
-    )
 
 
 if __name__ == "__main__":

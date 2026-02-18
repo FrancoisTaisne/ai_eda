@@ -119,6 +119,60 @@ function serializeError(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function safePreview(value, max = 500) {
+  try {
+    const text = JSON.stringify(value);
+    if (typeof text === "string") {
+      return text.length > max ? `${text.slice(0, max)}...` : text;
+    }
+  } catch (_) {
+    // ignore serialization preview errors
+  }
+  return "<non-serializable>";
+}
+
+function asStringOrNull(value) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function asNumberOrFallback(value, fallback) {
+  return typeof value === "number" ? value : fallback;
+}
+
+function asBooleanOrFallback(value, fallback) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function normalizeCreateComponentResult(result, input) {
+  const fallback = {
+    primitiveId: null,
+    designator: null,
+    uuid: input.uuid,
+    libraryUuid: input.libraryUuid,
+    x: input.x,
+    y: input.y,
+    subPartName: input.subPartName,
+    rotation: input.rotation,
+    mirror: input.mirror
+  };
+
+  if (!isPlainObject(result)) {
+    return fallback;
+  }
+
+  return {
+    primitiveId: asStringOrNull(result.primitiveId),
+    designator: asStringOrNull(result.designator),
+    uuid: asStringOrNull(result?.component?.uuid) ?? input.uuid,
+    libraryUuid: asStringOrNull(result?.component?.libraryUuid) ?? input.libraryUuid,
+    x: asNumberOrFallback(result.x, input.x),
+    y: asNumberOrFallback(result.y, input.y),
+    subPartName: asStringOrNull(result.subPartName) ?? input.subPartName,
+    rotation: asNumberOrFallback(result.rotation, input.rotation),
+    mirror: asBooleanOrFallback(result.mirror, input.mirror)
+  };
+}
+
 async function tryOptionalCalls(eda, candidates) {
   let firstError = null;
 
@@ -342,24 +396,67 @@ export function createEasyEdaAdapter(eda) {
       const subPartName = typeof input.subPartName === "string" ? input.subPartName : "";
       const rotation = typeof input.rotation === "number" ? input.rotation : 0;
       const mirror = typeof input.mirror === "boolean" ? input.mirror : false;
+      const createFn = getMethod(eda, "sch_PrimitiveComponent", "create");
+      const attempts = [
+        {
+          name: "create(component,x,y,subPart,rotation,mirror,addIntoBom,addIntoPcb)",
+          call: () => createFn({ uuid, libraryUuid }, x, y, subPartName, rotation, mirror, true, true)
+        },
+        {
+          name: "create(component,x,y,subPart,rotation,mirror)",
+          call: () => createFn({ uuid, libraryUuid }, x, y, subPartName, rotation, mirror)
+        },
+        {
+          name: "create({component,x,y,subPartName,rotation,mirror,addIntoBom,addIntoPcb})",
+          call: () =>
+            createFn({
+              component: { uuid, libraryUuid },
+              x,
+              y,
+              subPartName,
+              rotation,
+              mirror,
+              addIntoBom: true,
+              addIntoPcb: true
+            })
+        },
+        {
+          name: "create(uuid,libraryUuid,x,y,subPart,rotation,mirror,addIntoBom,addIntoPcb)",
+          call: () => createFn(uuid, libraryUuid, x, y, subPartName, rotation, mirror, true, true)
+        }
+      ];
 
-      console.log("[aieda] createComponent calling eda.sch_PrimitiveComponent.create directly");
+      console.log("[aieda] createComponent attempting eda.sch_PrimitiveComponent.create");
       console.log("[aieda] component:", JSON.stringify({ uuid, libraryUuid }));
       console.log("[aieda] position:", x, y, "subPartName:", subPartName, "rotation:", rotation, "mirror:", mirror);
 
-      try {
-        const result = await eda.sch_PrimitiveComponent.create(
-          { uuid, libraryUuid },
-          x, y, subPartName, rotation, mirror, true, true
-        );
-        console.log("[aieda] createComponent OK:", typeof result, JSON.stringify(result)?.substring(0, 500));
-        return result;
-      } catch (err) {
-        console.error("[aieda] createComponent CAUGHT ERROR:", err);
-        console.error("[aieda] error type:", typeof err, "name:", err?.name, "message:", err?.message);
-        console.error("[aieda] stack:", err?.stack);
-        throw new EasyEdaApiError("createComponent failed: " + (err?.message || String(err)));
+      const errors = [];
+      for (const attempt of attempts) {
+        try {
+          const result = await attempt.call();
+          const normalized = normalizeCreateComponentResult(result, {
+            uuid,
+            libraryUuid,
+            x,
+            y,
+            subPartName,
+            rotation,
+            mirror
+          });
+          console.log("[aieda] createComponent OK via", attempt.name, safePreview(normalized));
+          return normalized;
+        } catch (err) {
+          const message = serializeError(err);
+          errors.push(`${attempt.name}: ${message}`);
+          console.warn("[aieda] createComponent attempt failed:", attempt.name, message);
+        }
       }
+
+      throw new EasyEdaApiError(
+        `createComponent failed. Ensure uuid/libraryUuid come from search_component. Attempts: ${errors.join(
+          " | "
+        )}`
+      );
     },
 
     async modifyComponent(input) {
