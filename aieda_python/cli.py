@@ -68,6 +68,7 @@ def cmd_read_schema(args: argparse.Namespace) -> int:
         "include_components": True,
         "include_wires": args.include_wires,
         "include_polygons": args.include_polygons,
+        "include_texts": args.include_texts,
         "include_selected": args.include_selected,
         "include_document_source": args.include_document_source,
         "all_schematic_pages": args.all_pages,
@@ -184,6 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_read = sub.add_parser("read_schema", help="Read the schematic")
     p_read.add_argument("--include-wires", action="store_true", default=True)
     p_read.add_argument("--include-polygons", action="store_true", default=False)
+    p_read.add_argument("--include-texts", action="store_true", default=False)
     p_read.add_argument("--include-selected", action="store_true", default=False)
     p_read.add_argument("--include-document-source", action="store_true", default=False)
     p_read.add_argument("--all-pages", action="store_true", default=False)

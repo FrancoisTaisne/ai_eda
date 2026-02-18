@@ -36,7 +36,10 @@ const UPDATE_OPERATION_REQUIREMENTS = {
   delete_component: [["sch_PrimitiveComponent", "delete"]],
   create_wire: [["sch_PrimitiveWire", "create"]],
   modify_wire: [["sch_PrimitiveWire", "modify"]],
-  delete_wire: [["sch_PrimitiveWire", "delete"]]
+  delete_wire: [["sch_PrimitiveWire", "delete"]],
+  create_netflag: [["sch_PrimitiveComponent", "createNetFlag"]],
+  create_netport: [["sch_PrimitiveComponent", "createNetPort"]],
+  search_component: [["lib_Device", "search"]]
 };
 
 function hasMethod(eda, namespace, method) {
@@ -190,7 +193,36 @@ export function createEasyEdaAdapter(eda) {
     async getAllComponents({ cmdKey = null, allSchematicPages = false } = {}) {
       ensureRuntimeAvailable("getAllComponents");
       const fn = getMethod(eda, "sch_PrimitiveComponent", "getAll");
-      return fn(cmdKey, allSchematicPages);
+      const components = await fn(cmdKey, allSchematicPages);
+
+      // getAll returns primitiveId in "$1I<n>" format but modify/delete/get
+      // expect the "<prefix><n>" format returned by getAllPrimitiveId.
+      // Build a mapping from the numeric suffix to the canonical ID.
+      const idsFn = getOptionalMethod(eda, "sch_PrimitiveComponent", "getAllPrimitiveId");
+      if (idsFn && Array.isArray(components)) {
+        try {
+          const canonicalIds = await idsFn(cmdKey, allSchematicPages);
+          if (Array.isArray(canonicalIds)) {
+            const canonicalByNum = {};
+            for (const cid of canonicalIds) {
+              const m = typeof cid === "string" ? cid.match(/(\d+)$/) : null;
+              if (m) canonicalByNum[m[1]] = cid;
+            }
+            for (const comp of components) {
+              if (typeof comp.primitiveId === "string") {
+                const cm = comp.primitiveId.match(/(\d+)$/);
+                if (cm && canonicalByNum[cm[1]]) {
+                  comp.primitiveId = canonicalByNum[cm[1]];
+                }
+              }
+            }
+          }
+        } catch (_) {
+          // If getAllPrimitiveId fails, keep original IDs
+        }
+      }
+
+      return components;
     },
 
     async getAllWires({ net = null } = {}) {
@@ -209,6 +241,46 @@ export function createEasyEdaAdapter(eda) {
       ensureRuntimeAvailable("getSelectedPrimitives");
       const fn = getMethod(eda, "sch_SelectControl", "getAllSelectedPrimitives");
       return fn();
+    },
+
+    async getAllTexts() {
+      ensureRuntimeAvailable("getAllTexts");
+      const fn = getOptionalMethod(eda, "sch_PrimitiveText", "getAll");
+      if (!fn) return [];
+      const texts = await fn();
+      // Normalize primitiveId like components
+      const idsFn = getOptionalMethod(eda, "sch_PrimitiveText", "getAllPrimitiveId");
+      if (idsFn && Array.isArray(texts)) {
+        try {
+          const canonicalIds = await idsFn();
+          if (Array.isArray(canonicalIds)) {
+            const canonicalByNum = {};
+            for (const cid of canonicalIds) {
+              const m = typeof cid === "string" ? cid.match(/(\d+)$/) : null;
+              if (m) canonicalByNum[m[1]] = cid;
+            }
+            for (const text of texts) {
+              if (typeof text.primitiveId === "string") {
+                const cm = text.primitiveId.match(/(\d+)$/);
+                if (cm && canonicalByNum[cm[1]]) {
+                  text.primitiveId = canonicalByNum[cm[1]];
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      return texts;
+    },
+
+    async modifyText(input) {
+      ensureRuntimeAvailable("modifyText");
+      requireString(input.primitiveId, "primitiveId");
+      if (!isPlainObject(input.property)) {
+        throw new EasyEdaApiError("property must be an object");
+      }
+      const fn = getMethod(eda, "sch_PrimitiveText", "modify");
+      return fn(input.primitiveId, input.property);
     },
 
     async getDocumentSource() {
@@ -267,17 +339,27 @@ export function createEasyEdaAdapter(eda) {
         throw new EasyEdaApiError("x and y must be numbers");
       }
 
-      const fn = getMethod(eda, "sch_PrimitiveComponent", "create");
-      return fn(
-        { uuid, libraryUuid },
-        x,
-        y,
-        typeof input.subPartName === "string" ? input.subPartName : "",
-        typeof input.rotation === "number" ? input.rotation : 0,
-        typeof input.mirror === "boolean" ? input.mirror : false,
-        typeof input.addIntoBom === "boolean" ? input.addIntoBom : true,
-        typeof input.addIntoPcb === "boolean" ? input.addIntoPcb : true
-      );
+      const subPartName = typeof input.subPartName === "string" ? input.subPartName : "";
+      const rotation = typeof input.rotation === "number" ? input.rotation : 0;
+      const mirror = typeof input.mirror === "boolean" ? input.mirror : false;
+
+      console.log("[aieda] createComponent calling eda.sch_PrimitiveComponent.create directly");
+      console.log("[aieda] component:", JSON.stringify({ uuid, libraryUuid }));
+      console.log("[aieda] position:", x, y, "subPartName:", subPartName, "rotation:", rotation, "mirror:", mirror);
+
+      try {
+        const result = await eda.sch_PrimitiveComponent.create(
+          { uuid, libraryUuid },
+          x, y, subPartName, rotation, mirror, true, true
+        );
+        console.log("[aieda] createComponent OK:", typeof result, JSON.stringify(result)?.substring(0, 500));
+        return result;
+      } catch (err) {
+        console.error("[aieda] createComponent CAUGHT ERROR:", err);
+        console.error("[aieda] error type:", typeof err, "name:", err?.name, "message:", err?.message);
+        console.error("[aieda] stack:", err?.stack);
+        throw new EasyEdaApiError("createComponent failed: " + (err?.message || String(err)));
+      }
     },
 
     async modifyComponent(input) {
@@ -337,6 +419,46 @@ export function createEasyEdaAdapter(eda) {
       }
       const fn = getMethod(eda, "sch_PrimitiveWire", "delete");
       return fn(input.primitiveIds);
+    },
+
+    async createNetFlag(input) {
+      ensureRuntimeAvailable("createNetFlag");
+      assertUpdateOperationSupported("create_netflag");
+      requireString(input.identification, "identification");
+      requireString(input.net, "net");
+      if (typeof input.x !== "number" || typeof input.y !== "number") {
+        throw new EasyEdaApiError("x and y must be numbers");
+      }
+      const rotation = typeof input.rotation === "number" ? input.rotation : 0;
+      const mirror = typeof input.mirror === "boolean" ? input.mirror : false;
+
+      console.log("[aieda] createNetFlag:", JSON.stringify({ identification: input.identification, net: input.net, x: input.x, y: input.y }));
+      const fn = getMethod(eda, "sch_PrimitiveComponent", "createNetFlag");
+      return fn(input.identification, input.net, input.x, input.y, rotation, mirror);
+    },
+
+    async createNetPort(input) {
+      ensureRuntimeAvailable("createNetPort");
+      assertUpdateOperationSupported("create_netport");
+      requireString(input.direction, "direction");
+      requireString(input.net, "net");
+      if (typeof input.x !== "number" || typeof input.y !== "number") {
+        throw new EasyEdaApiError("x and y must be numbers");
+      }
+      const rotation = typeof input.rotation === "number" ? input.rotation : 0;
+      const mirror = typeof input.mirror === "boolean" ? input.mirror : false;
+
+      console.log("[aieda] createNetPort:", JSON.stringify({ direction: input.direction, net: input.net, x: input.x, y: input.y }));
+      const fn = getMethod(eda, "sch_PrimitiveComponent", "createNetPort");
+      return fn(input.direction, input.net, input.x, input.y, rotation, mirror);
+    },
+
+    async searchComponent(input) {
+      ensureRuntimeAvailable("searchComponent");
+      requireString(input.keyword, "keyword");
+      console.log("[aieda] searchComponent:", input.keyword);
+      const fn = getMethod(eda, "lib_Device", "search");
+      return fn(input.keyword);
     }
   };
 }

@@ -54,7 +54,7 @@ _plugin_ws: web.WebSocketResponse | None = None
 _pending: dict[str, asyncio.Future[dict[str, Any]]] = {}
 _plugin_meta: dict[str, Any] = {}
 
-COMMAND_TIMEOUT_S = 10.0
+COMMAND_TIMEOUT_S = 30.0
 
 # ---------------------------------------------------------------------------
 # Auth middleware

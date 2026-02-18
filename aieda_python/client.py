@@ -25,7 +25,7 @@ def _load_token() -> str:
 class BridgeClient:
     host: str = "127.0.0.1"
     port: int = 8787
-    timeout_seconds: float = 10.0
+    timeout_seconds: float = 60.0
     token: str = field(default_factory=_load_token)
 
     @property

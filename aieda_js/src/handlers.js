@@ -73,6 +73,7 @@ async function handleReadSchema(payload, context) {
   const includePolygons = params.include_polygons === true;
   const includeSelected = params.include_selected === true;
   const includeDocumentSource = params.include_document_source === true;
+  const includeTexts = params.include_texts === true;
 
   const schema = {};
   if (includeComponents) {
@@ -89,6 +90,9 @@ async function handleReadSchema(payload, context) {
   if (includePolygons) {
     schema.polygons = await context.adapter.getAllPolygons();
   }
+  if (includeTexts) {
+    schema.texts = await context.adapter.getAllTexts();
+  }
   if (includeSelected) {
     schema.selected = await context.adapter.getSelectedPrimitives();
   }
@@ -102,6 +106,7 @@ async function handleReadSchema(payload, context) {
       components: Array.isArray(schema.components) ? schema.components.length : 0,
       wires: Array.isArray(schema.wires) ? schema.wires.length : 0,
       polygons: Array.isArray(schema.polygons) ? schema.polygons.length : 0,
+      texts: Array.isArray(schema.texts) ? schema.texts.length : 0,
       selected: Array.isArray(schema.selected) ? schema.selected.length : 0
     },
     schema
@@ -171,6 +176,14 @@ async function executeSchemaOperation(operation, context) {
       return context.adapter.modifyWire(asObject(operation.input));
     case "delete_wire":
       return context.adapter.deleteWire(asObject(operation.input));
+    case "modify_text":
+      return context.adapter.modifyText(asObject(operation.input));
+    case "create_netflag":
+      return context.adapter.createNetFlag(asObject(operation.input));
+    case "create_netport":
+      return context.adapter.createNetPort(asObject(operation.input));
+    case "search_component":
+      return context.adapter.searchComponent(asObject(operation.input));
     default:
       throw new Error(`Unsupported schema operation: ${kind || "<empty>"}`);
   }
