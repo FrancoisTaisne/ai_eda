@@ -1,0 +1,76 @@
+openapi: 3.0.0
+info:
+  title: AI-EDA Bridge
+  description: Bridge pour modifier des schémas EasyEDA Pro via IA (ChatGPT Actions)
+  version: "1.1"
+servers:
+  - url: https://ai-eda-f9lp.onrender.com
+    description: Production Render
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+
+  /schematic/patch:
+    post:
+      summary: Appliquer des modifications sur un schéma
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchRequest'
+      responses:
+        '200':
+          description: Schéma modifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatchResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Clé API à configurer dans ton Custom GPT
+
+  schemas:
+    Command:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "add_component"
+        payload:
+          type: object
+
+    PatchRequest:
+      type: object
+      properties:
+        project_base64:
+          type: string
+          description: Fichier .epro encodé en base64
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/Command'
+
+    PatchResponse:
+      type: object
+      properties:
+        patched_project_base64:
+          type: string
+        log:
+          type: array
+          items:
+            type: string
+        success:
+          type: boolean

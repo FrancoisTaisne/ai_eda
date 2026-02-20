@@ -6,6 +6,7 @@
 ## Scope v1
 - Report runtime capability status
 - Check EasyEDA authentication state
+- Search component library
 - Read schematic data
 - List components
 - Apply controlled write operations
@@ -38,7 +39,7 @@
 src/
   protocol.js       -> message normalization + envelope creation
   dispatcher.js     -> validation + policy + handler execution
-  handlers.js       -> get_runtime_status / check_auth / read_schema / list_components / update_schema
+  handlers.js       -> get_runtime_status / check_auth / search_component / read_schema / list_components / update_schema
   adapters.js       -> EasyEDA adapter + mock adapter
   bridge-client.js  -> reconnecting WebSocket transport
   index.js          -> runtime assembly + activate/deactivate + self-test
