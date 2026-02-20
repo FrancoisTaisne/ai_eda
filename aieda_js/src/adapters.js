@@ -27,7 +27,9 @@ const RUNTIME_MINIMUM_REQUIREMENTS = [
 const READ_OPTIONAL_REQUIREMENTS = [
   ["sch_PrimitivePolygon", "getAll"],
   ["sch_SelectControl", "getAllSelectedPrimitives"],
-  ["sys_FileManager", "getDocumentSource"]
+  ["sys_FileManager", "getDocumentSource"],
+  ["sch_PrimitiveComponent", "get"],
+  ["sch_PrimitiveComponent", "getAllPrimitiveId"]
 ];
 
 const UPDATE_OPERATION_REQUIREMENTS = {
@@ -267,6 +269,41 @@ export function createEasyEdaAdapter(eda) {
                 const cm = comp.primitiveId.match(/(\d+)$/);
                 if (cm && canonicalByNum[cm[1]]) {
                   comp.primitiveId = canonicalByNum[cm[1]];
+                }
+              }
+            }
+
+            // Resolve canonical IDs for components that have no primitiveId in getAll()
+            // (e.g. netflags). After the suffix-matching pass above, any canonical ID
+            // not yet assigned to a component is a candidate for an unmapped component.
+            const usedIds = new Set(
+              components
+                .map((c) => c.primitiveId)
+                .filter((id) => typeof id === "string" && /^e\d+$/.test(id))
+            );
+            const unusedIds = canonicalIds.filter(
+              (cid) => typeof cid === "string" && !usedIds.has(cid)
+            );
+            const unmapped = components.filter(
+              (c) => !/^e\d+$/.test(String(c.primitiveId ?? ""))
+            );
+            if (unusedIds.length > 0 && unmapped.length > 0) {
+              const getFn = getOptionalMethod(eda, "sch_PrimitiveComponent", "get");
+              if (getFn) {
+                for (const cid of unusedIds) {
+                  try {
+                    const info = await getFn(cid);
+                    if (!info || typeof info !== "object") continue;
+                    const match = unmapped.find(
+                      (c) =>
+                        !/^e\d+$/.test(String(c.primitiveId ?? "")) &&
+                        c.x === info.x &&
+                        c.y === info.y
+                    );
+                    if (match) {
+                      match.primitiveId = cid;
+                    }
+                  } catch (_) { /* ignore */ }
                 }
               }
             }
@@ -606,6 +643,7 @@ export function createMockAdapter() {
         },
         update_operations: {
           available: [
+            "search_component",
             "create_component",
             "modify_component",
             "delete_component",
@@ -657,6 +695,29 @@ export function createMockAdapter() {
         },
         raw: null
       };
+    },
+
+    async searchComponent(input) {
+      requireString(input.keyword, "keyword");
+      const keyword = input.keyword.toLowerCase();
+      if (keyword.includes("esp32")) {
+        return [
+          {
+            uuid: "193bb41f53b74e4b8632181a7f3b059e",
+            libraryUuid: "0819f05c4eef4c71ace90d822a990e87",
+            subPartName: "ESP32-C6-WROOM-1-N8.1",
+            name: "ESP32-C6-WROOM-1-N8"
+          }
+        ];
+      }
+      return [
+        {
+          uuid: "mock-component-uuid",
+          libraryUuid: "mock-library-uuid",
+          subPartName: "MOCK_PART.1",
+          name: input.keyword
+        }
+      ];
     },
 
     async createComponent(input) {

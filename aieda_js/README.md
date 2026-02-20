@@ -21,6 +21,7 @@ Detailed implementation schema: `IMPLEMENTATION_SCHEMA.md`
 ## Actions (v1)
 - `get_runtime_status`
 - `check_auth`
+- `search_component`
 - `read_schema`
 - `list_components`
 - `update_schema`

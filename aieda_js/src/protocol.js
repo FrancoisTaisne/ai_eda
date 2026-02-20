@@ -5,6 +5,7 @@ export const EVENT_TYPE = "event";
 
 export const ACTIONS = {
   GET_RUNTIME_STATUS: "get_runtime_status",
+  SEARCH_COMPONENT: "search_component",
   READ_SCHEMA: "read_schema",
   LIST_COMPONENTS: "list_components",
   UPDATE_SCHEMA: "update_schema",

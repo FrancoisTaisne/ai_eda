@@ -66,6 +66,24 @@ async function handleCheckAuth(payload, context) {
   };
 }
 
+async function handleSearchComponent(payload, context) {
+  const params = asObject(payload);
+  const keyword = typeof params.keyword === "string" ? params.keyword.trim() : "";
+  if (!keyword) {
+    throw new Error("search_component requires a non-empty keyword");
+  }
+  if (typeof context.adapter.searchComponent !== "function") {
+    throw new Error("search_component is not supported by this adapter");
+  }
+
+  const matches = await context.adapter.searchComponent({ keyword });
+  return {
+    adapter: context.adapter.type,
+    keyword,
+    matches
+  };
+}
+
 async function handleReadSchema(payload, context) {
   const params = asObject(payload);
   const includeComponents = params.include_components !== false;
@@ -242,6 +260,7 @@ export function createCommandHandlers() {
   return {
     [ACTIONS.GET_RUNTIME_STATUS]: handleGetRuntimeStatus,
     [ACTIONS.CHECK_AUTH]: handleCheckAuth,
+    [ACTIONS.SEARCH_COMPONENT]: handleSearchComponent,
     [ACTIONS.READ_SCHEMA]: handleReadSchema,
     [ACTIONS.LIST_COMPONENTS]: handleListComponents,
     [ACTIONS.UPDATE_SCHEMA]: handleUpdateSchema

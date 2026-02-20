@@ -11,6 +11,7 @@ PROTOCOL_VERSION = "1.0.0"
 SUPPORTED_ACTIONS = {
     "check_auth",
     "get_runtime_status",
+    "search_component",
     "read_schema",
     "update_schema",
     "list_components",

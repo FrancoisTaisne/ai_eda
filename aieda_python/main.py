@@ -20,6 +20,7 @@ def print_help() -> None:
     print("Commands:")
     print("  help")
     print("  check_auth")
+    print("  search_component <keyword>")
     print("  read_schema")
     print("  list_components")
     print("  update_schema <json_payload>")
@@ -50,6 +51,14 @@ def main() -> int:
 
         if raw == "check_auth":
             command = BridgeCommand(action="check_auth")
+        elif raw.startswith("search_component"):
+            _, _, keyword = raw.partition(" ")
+            if not keyword.strip():
+                print("Keyword is required, example: search_component ESP32-C6")
+                continue
+            command = BridgeCommand(
+                action="search_component", payload={"keyword": keyword.strip()}
+            )
         elif raw == "read_schema":
             command = BridgeCommand(action="read_schema")
         elif raw == "list_components":

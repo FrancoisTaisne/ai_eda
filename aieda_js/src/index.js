@@ -318,6 +318,13 @@ async function runSelfTest() {
   console.log("SELF_TEST check_auth");
   console.log(JSON.stringify(authResp, null, 2));
 
+  const searchResp = await runtime.dispatchCommand({
+    action: "search_component",
+    payload: { keyword: "esp32" }
+  });
+  console.log("SELF_TEST search_component");
+  console.log(JSON.stringify(searchResp, null, 2));
+
   const readResp = await runtime.dispatchCommand({
     action: "read_schema",
     payload: { include_document_source: true }

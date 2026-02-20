@@ -75,11 +75,22 @@ python aieda_python/cli.py read_schema
 python aieda_python/cli.py list_components
 python aieda_python/cli.py list_components --selected-only --limit 50
 
+# Search library components
+python aieda_python/cli.py search_component "ESP32-C6-WROOM-1-N8"
+
+# Export typed requirements template
+python aieda_python/cli.py export_requirements_template --output needs.json
+
 # Modify the schematic (requires --confirm)
 python aieda_python/cli.py update_schema '{"operations":[...]}' --confirm
 
 # Dry run (no actual changes)
 python aieda_python/cli.py update_schema '{"operations":[...]}' --dry-run
+
+# Build/apply from a requirements file (secure pipeline)
+python aieda_python/cli.py plan_requirements --requirements-file needs.json
+python aieda_python/cli.py apply_requirements --requirements-file needs.json --confirm
+python aieda_python/cli.py verify_operations --payload-file ops.json
 
 # Stop the server
 python aieda_python/cli.py stop
@@ -93,6 +104,7 @@ All commands output JSON to stdout and return exit code 0 on success, 1 on error
 |---|---|---|
 | `get_runtime_status` | Adapter type, capabilities, available APIs | No |
 | `check_auth` | EasyEDA user authentication state | No |
+| `search_component` | Search EasyEDA library and return candidates | No |
 | `read_schema` | Components, wires, polygons, selected items | No |
 | `list_components` | Filtered component list with field selection | No |
 | `update_schema` | Create, modify or delete components and wires | Yes |
